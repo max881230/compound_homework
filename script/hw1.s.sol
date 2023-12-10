@@ -20,10 +20,13 @@ contract TestERC20 is ERC20 {
 }
 
 contract compoundScript is Script {
-    TestERC20 tokenA;
+    TestERC20 tokenA = new TestERC20("tokenA", "TKA");
+    TestERC20 tokenB = new TestERC20("tokenB", "TKB");
 
     CErc20Delegate cErc20Delegate;
-    CErc20Delegator cErc20Delegator;
+
+    CErc20Delegator cTokenA;
+    CErc20Delegator cTokenB;
 
     WhitePaperInterestRateModel whitePaper;
     SimplePriceOracle priceOracle;
@@ -35,8 +38,12 @@ contract compoundScript is Script {
     function run() public {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
+        deploycToken(0xa3aDEAF5b297fb984440eF172fEBEd5B79bAa9DA);
+        vm.stopBroadcast();
+    }
 
-        tokenA = new TestERC20("token A", "TKA");
+    function deploycToken(address admin_) public {
+        // tokenA = new TestERC20("tokenA", "TKA");
         // console2.log(tokenA.decimals());
 
         priceOracle = new SimplePriceOracle();
@@ -52,7 +59,7 @@ contract compoundScript is Script {
 
         cErc20Delegate = new CErc20Delegate();
 
-        cErc20Delegator = new CErc20Delegator(
+        cTokenA = new CErc20Delegator(
             address(tokenA),
             unitrollerProxy,
             whitePaper,
@@ -60,12 +67,24 @@ contract compoundScript is Script {
             "cTokenA",
             "cTKA",
             18,
-            payable(msg.sender),
+            payable(admin_),
             // payable(0xa3aDEAF5b297fb984440eF172fEBEd5B79bAa9DA),
             address(cErc20Delegate),
             new bytes(0)
         );
 
-        vm.stopBroadcast();
+        cTokenB = new CErc20Delegator(
+            address(tokenB),
+            unitrollerProxy,
+            whitePaper,
+            1e18,
+            "cTokenB",
+            "cTKB",
+            18,
+            payable(admin_),
+            // payable(0xa3aDEAF5b297fb984440eF172fEBEd5B79bAa9DA),
+            address(cErc20Delegate),
+            new bytes(0)
+        );
     }
 }

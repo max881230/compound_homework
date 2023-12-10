@@ -17,10 +17,21 @@ contract hw2_test is Test, compoundScript {
         deploycToken(admin);
 
         unitrollerProxy._supportMarket(CToken(address(cTokenA)));
-        priceOracle.setUnderlyingPrice(CToken(address(cTokenA)), 1e18);
-        vm.stopPrank();
+        unitrollerProxy._supportMarket(CToken(address(cTokenB)));
 
+        deal(address(tokenA), admin, initialBalance);
         deal(address(tokenA), user1, initialBalance);
+        deal(address(tokenB), user1, initialBalance);
+        deal(address(tokenA), user2, initialBalance);
+
+        priceOracle.setUnderlyingPrice(CToken(address(cTokenA)), 1e18);
+        priceOracle.setUnderlyingPrice(CToken(address(cTokenB)), 100 * 1e18);
+
+        unitrollerProxy._setCollateralFactor(
+            CToken(address(cTokenB)),
+            5 * 1e17
+        );
+        vm.stopPrank();
     }
 
     function testMintAndRedeem() public {
@@ -41,7 +52,36 @@ contract hw2_test is Test, compoundScript {
         vm.stopPrank();
     }
 
-    function testBorrowAndRepay() public {}
+    function testBorrowAndRepay() public {
+        vm.startPrank(user1);
+
+        // mint
+        uint256 mintAmount = 1 * 10 ** 18;
+        tokenB.approve(address(cTokenB), mintAmount);
+        cTokenB.mint(mintAmount);
+        assertEq(cTokenB.balanceOf(user1), mintAmount);
+
+        // enter market
+        address[] memory cTokens = new address[](1);
+        cTokens[0] = address(cTokenB);
+        unitrollerProxy.enterMarkets(cTokens);
+
+        vm.stopPrank();
+
+        // add some liquidity into cTokenA for borrowing
+        vm.startPrank(admin);
+        tokenA.approve(address(cTokenA), 100 * 10 ** 18);
+        cTokenA.mint(100 * 10 ** 18);
+        assertEq(cTokenA.balanceOf(admin), 100 * 10 ** 18);
+        vm.stopPrank();
+
+        // borrow
+        vm.startPrank(user1);
+        uint256 borrowAmount = 50 * 10 ** tokenA.decimals();
+        cTokenA.borrow(borrowAmount);
+        assertEq(tokenA.balanceOf(user1), initialBalance + borrowAmount);
+        vm.stopPrank();
+    }
 
     function testAdjustCollateralFactorAndLiquidation() public {}
 

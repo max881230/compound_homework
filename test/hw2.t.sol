@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "../script/hw1.s.sol";
 import {CErc20} from "compound-protocol/contracts/CErc20.sol";
 import {CToken} from "compound-protocol/contracts/CToken.sol";
+import {ComptrollerV1Storage} from "compound-protocol/contracts/ComptrollerStorage.sol";
 
 contract hw2_test is Test, compoundScript {
     address admin = makeAddr("admin");
@@ -31,6 +32,8 @@ contract hw2_test is Test, compoundScript {
             CToken(address(cTokenB)),
             5 * 1e17
         );
+        unitrollerProxy._setCloseFactor(5 * 1e17);
+        unitrollerProxy._setLiquidationIncentive(1.08 * 1e18);
         vm.stopPrank();
     }
 
@@ -83,7 +86,73 @@ contract hw2_test is Test, compoundScript {
         vm.stopPrank();
     }
 
-    function testAdjustCollateralFactorAndLiquidation() public {}
+    function testAdjustCollateralFactorAndLiquidation() public {
+        testBorrowAndRepay();
 
-    function testSetOraclePriceAndLiquidatoin() public {}
+        (uint err, uint liquidity, uint shortfall) = unitrollerProxy
+            .getAccountLiquidity(user1);
+
+        // adjust collateralFactor from 50% to 30%
+        vm.startPrank(admin);
+        unitrollerProxy._setCollateralFactor(
+            CToken(address(cTokenB)),
+            3 * 1e17
+        );
+        vm.stopPrank();
+
+        // user2 starts to liquidate user1's asset
+        vm.startPrank(user2);
+        (err, liquidity, shortfall) = unitrollerProxy.getAccountLiquidity(
+            user1
+        );
+
+        uint closeFactorMantissa = unitrollerProxy.closeFactorMantissa();
+        uint borrowBalance = cTokenA.borrowBalanceCurrent(user1);
+        uint repayAmount = (borrowBalance * closeFactorMantissa) / 1e18;
+
+        console2.log(closeFactorMantissa / 1e16);
+        console2.log(borrowBalance / 1e18);
+        console2.log(repayAmount / 10 ** tokenA.decimals());
+
+        tokenA.approve(address(cTokenA), repayAmount);
+        cTokenA.liquidateBorrow(user1, repayAmount, cTokenB);
+        assertGt(cTokenB.balanceOf(user2), 0);
+
+        console2.log("cTokenB of user2: ", cTokenB.balanceOf(user2));
+        vm.stopPrank();
+    }
+
+    function testSetOraclePriceAndLiquidatoin() public {
+        testBorrowAndRepay();
+
+        (uint err, uint liquidity, uint shortfall) = unitrollerProxy
+            .getAccountLiquidity(user1);
+
+        // adjust 1 tokenB from 100USD to 90USD
+        vm.startPrank(admin);
+        priceOracle.setUnderlyingPrice(CToken(address(cTokenB)), 90 * 1e18);
+        vm.stopPrank();
+
+        // user2 starts to liquidate user1's asset
+        vm.startPrank(user2);
+
+        (err, liquidity, shortfall) = unitrollerProxy.getAccountLiquidity(
+            user1
+        );
+
+        uint closeFactorMantissa = unitrollerProxy.closeFactorMantissa();
+        uint borrowBalance = cTokenA.borrowBalanceCurrent(user1);
+        uint repayAmount = (borrowBalance * closeFactorMantissa) / 1e18;
+
+        console2.log(closeFactorMantissa / 1e16);
+        console2.log(borrowBalance / 1e18);
+        console2.log(repayAmount / 10 ** tokenA.decimals());
+
+        tokenA.approve(address(cTokenA), repayAmount);
+        cTokenA.liquidateBorrow(user1, repayAmount, cTokenB);
+        assertGt(cTokenB.balanceOf(user2), 0);
+
+        console2.log("cTokenB of user2: ", cTokenB.balanceOf(user2));
+        vm.stopPrank();
+    }
 }

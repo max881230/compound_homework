@@ -86,22 +86,14 @@ contract hw3_test is Test, compoundScript {
     function testSetOraclePriceAndLiquidatoin() public {
         testMintAndBorrow();
 
-        (uint err, uint liquidity, uint shortfall) = unitrollerProxy
-            .getAccountLiquidity(user1);
-
         // adjust UNI price from 5 usd to 4 usd
         vm.startPrank(admin);
         priceOracle.setUnderlyingPrice(CToken(address(cUNI)), 4 * 1e18);
         vm.stopPrank();
 
-        (err, liquidity, shortfall) = unitrollerProxy.getAccountLiquidity(
-            user1
-        );
-
-        console2.log(err);
-        console2.log(liquidity);
-        console2.log(shortfall);
-
+        (uint err, uint liquidity, uint shortfall) = unitrollerProxy
+            .getAccountLiquidity(user1);
+        require(shortfall > 0, "asset can be liquidated");
         // user2 start liquidation with aave protocol
         vm.startPrank(user2);
 
@@ -111,6 +103,11 @@ contract hw3_test is Test, compoundScript {
 
         // result : earn 63.63 USDC
         assertGt(USDC.balanceOf(user2), 0);
+        console2.log(
+            "user2's liquidation reward: ",
+            USDC.balanceOf(user2) / 1e6,
+            "USDC"
+        );
         vm.stopPrank();
     }
 }
